@@ -127,13 +127,26 @@ class GoogleLoginRequest(BaseModel):
 
 @router.post("/google")
 def login_google(data: GoogleLoginRequest, request: Request, db: Session = Depends(get_db)):
-    user = db.query(Usuario).filter(
-        Usuario.email == data.email,
-        Usuario.google_id == data.google_id
-    ).first()
+    user = db.query(Usuario).filter(Usuario.email == data.email).first()
 
     if user:
+        # Si existe, validamos que coincida el ID de Google (opcional pero recomendado)
+        if user.google_id != data.google_id:
+            raise HTTPException(status_code=401, detail="Google ID no coincide")
         registrar_auditoria(db, user.id, "Login con Google", request.client.host)
         return {"success": True, "usuario_id": user.id, "nombre": user.nombre}
     
-    raise HTTPException(status_code=401, detail="Usuario no registrado con Google")
+    # Si no existe, lo creamos automáticamente
+    nuevo = Usuario(
+        nombre=data.email.split('@')[0],  # Puedes usar otra lógica para el nombre
+        email=data.email,
+        google_id=data.google_id,
+        api_key=None  # Si usas solo Google, esto puede quedar vacío
+    )
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+
+    registrar_auditoria(db, nuevo.id, "Usuario creado automáticamente con Google", request.client.host)
+    return {"success": True, "usuario_id": nuevo.id, "nombre": nuevo.nombre}
+

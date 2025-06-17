@@ -46,17 +46,20 @@ def registrar_auditoria(db, usuario_id: int, accion: str, ip: str):
 
 # Ruta: login
 @router.post("/login")
-def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
+def login_api(data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(Usuario).filter(
         Usuario.email == data.email,
         Usuario.api_key == data.api_key
     ).first()
 
     if user:
-        registrar_auditoria(db, user.id, "Inicio de sesión", request.client.host)
-        return {"success": True, "usuario_id": user.id}
+        return {
+            "success": True,
+            "usuario_id": user.id,
+            "nombre": user.nombre  # 👈 Asegúrate de incluir esto
+        }
+    return {"success": False}
 
-    return {"success": False, "message": "Credenciales incorrectas"}
 
 # Ruta: login JWT
 @router.post("/jwt")

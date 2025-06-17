@@ -4,6 +4,8 @@ from datetime import datetime
 from database import SessionLocal
 from models import Auditoria
 from pydantic import BaseModel
+from sqlalchemy.orm import joinedload  # 👈 importa esto si no lo tienes
+
 
 router = APIRouter()
 
@@ -35,3 +37,17 @@ def registrar_accion(
     db.add(nueva)
     db.commit()
     return {"message": "Acción registrada correctamente"}
+
+@router.get("/auditoria")
+def listar_auditorias(db: Session = Depends(get_db)):
+    auditorias = db.query(Auditoria).options(joinedload(Auditoria.usuario)).all()
+    return [
+        {
+            "id": a.id,
+            "accion": a.accion,
+            "fecha": a.fecha.strftime("%Y-%m-%d %H:%M:%S"),
+            "ip_cliente": a.ip_cliente,
+            "usuario": a.usuario.nombre if a.usuario else "Desconocido"
+        }
+        for a in auditorias
+    ]

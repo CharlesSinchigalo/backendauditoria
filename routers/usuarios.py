@@ -4,6 +4,7 @@ from database import SessionLocal
 from models import Usuario, Auditoria
 from pydantic import BaseModel
 from datetime import datetime
+import jwt
 
 router = APIRouter()
 
@@ -18,6 +19,10 @@ def get_db():
 class LoginRequest(BaseModel):
     email: str
     api_key: str
+
+class JWTLoginRequest(BaseModel):
+    email: str
+    password: str
 
 class UsuarioCreate(BaseModel):
     nombre: str
@@ -50,7 +55,24 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
     if user:
         registrar_auditoria(db, user.id, "Inicio de sesión", request.client.host)
         return {"success": True, "usuario_id": user.id}
-    
+
+    return {"success": False, "message": "Credenciales incorrectas"}
+
+# Ruta: login JWT
+@router.post("/jwt")
+def jwt_login(request: Request, data: JWTLoginRequest, db: Session = Depends(get_db)):
+    user = db.query(Usuario).filter(
+        Usuario.email == data.email,
+        Usuario.api_key == data.password
+    ).first()
+
+    if user:
+        payload = {"sub": user.email, "user_id": user.id}
+        token = jwt.encode(payload, "secreta123", algorithm="HS256")
+
+        registrar_auditoria(db, user.id, "Inicio de sesión JWT", request.client.host)
+        return {"success": True, "usuario_id": user.id, "token": token}
+
     return {"success": False, "message": "Credenciales incorrectas"}
 
 # Ruta: crear usuario
@@ -94,3 +116,21 @@ def eliminar_usuario(usuario_id: int, request: Request, db: Session = Depends(ge
 
     registrar_auditoria(db, usuario_id, "Usuario eliminado", request.client.host)
     return {"message": "Usuario eliminado"}
+
+
+class GoogleLoginRequest(BaseModel):
+    email: str
+    google_id: str
+
+@router.post("/google")
+def login_google(data: GoogleLoginRequest, request: Request, db: Session = Depends(get_db)):
+    user = db.query(Usuario).filter(
+        Usuario.email == data.email,
+        Usuario.google_id == data.google_id
+    ).first()
+
+    if user:
+        registrar_auditoria(db, user.id, "Login con Google", request.client.host)
+        return {"success": True, "usuario_id": user.id, "nombre": user.nombre}
+    
+    raise HTTPException(status_code=401, detail="Usuario no registrado con Google")
